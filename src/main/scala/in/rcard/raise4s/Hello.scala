@@ -1,5 +1,8 @@
-import in.rcard.raise4s.Raise.raise
-import in.rcard.raise4s.{DefaultRaise, Raise, raises}
+package in.rcard.raise4s
+
+import in.rcard.raise4s.Raise.{ensure, ensureNotNull}
+import in.rcard.raise4s.RaiseAnyPredef.{raise, succeed}
+import in.rcard.raise4s.raises
 import ox.{ErrorMode, par, sleep}
 
 import scala.concurrent.duration.*
@@ -98,31 +101,83 @@ import scala.concurrent.duration.*
 //
 //def parRaise[E, T1, T2](t1: => T1 raises E, t2: => T2 raises E): (T1, T2) raises E = ???
 
-class RaiseErrorMode[E] extends ErrorMode[E, [T] =>> Raise[E] ?=> T] {
+sealed trait Error
+case object NegativeAmount      extends Error
+case object BankAccountNotFound extends Error
+case object NotEnoughFunds      extends Error
 
-  override def isError[T](f: Raise[E] ?=> T): Boolean = ???
+case class BankAccount(val balance: Double)
 
-  override def getError[T](f: Raise[E] ?=> T): E = ???
+def withdraw(account: BankAccount, amount: Double): BankAccount raises Error =
+  ensure(amount > 0, () => NegativeAmount)
+  ensureNotNull(account, () => BankAccountNotFound)
+  ensure(account.balance >= amount, () => NotEnoughFunds)
+  account.copy(balance = account.balance - amount)
 
-  override def getT[T](f: Raise[E] ?=> T): T = ???
+class RaiseErrorMode[E: Raise] extends ErrorMode[E, [T] =>> Raise[E] ?=> T] {
 
-  override def pure[T](t: T): Raise[E] ?=> T = ???
+  private val evaluations: scala.collection.mutable.Map[Raise[E] ?=> Any, Either[E, Any]] =
+    scala.collection.mutable.Map.empty
 
-  override def pureError[T](e: E): Raise[E] ?=> T = ???
+  override def isError[T](f: Raise[E] ?=> T): Boolean = {
+    evaluations.getOrElseUpdate(f, Raise.either(f)).isLeft
+  }
+
+  override def getError[T](f: Raise[E] ?=> T): E = {
+    evaluations(f).swap.getOrElse(null.asInstanceOf[E])
+  }
+
+  override def getT[T](f: Raise[E] ?=> T): T =
+    evaluations(f).getOrElse(null).asInstanceOf[T]
+
+  override def pure[T](t: T): Raise[E] ?=> T = t.succeed
+
+  override def pureError[T](e: E): Raise[E] ?=> T = e.raise[T]
 }
 
 @main def helloWorld(): Unit = {
 
-  val result: (String, Int) raises Int =
-    par(RaiseErrorMode[Int]())(
+  val result: (Int, String) raises Int =
+    par(RaiseErrorMode[Int])(
       {
         sleep(200.millis)
-        "1"
+        println("Lambda 1")
+        1
       }, {
         sleep(100.millis)
-        raise(-1)
+        println("Lambda 2")
+        Raise.raise(-1)
       }
     )
+
+//  val resultEither: Either[Int, (Int, String)] =
+//    par(EitherMode[Int])(
+//      {
+//        sleep(200.millis)
+//        println("Lambda 1")
+//        Right(1)
+//      }, {
+//        sleep(100.millis)
+//        println("Lambda 2")
+//        Right("1")
+//      }
+//    )
+//  println(resultEither)
+
+  Raise.fold(
+    block = result,
+    recover = error => println(s"Error: $error"),
+    transform = tuple => {
+      println(s"Success: $tuple._1, $tuple._2")
+    }
+  )
+}
+
+//  Raise.fold(
+//    block = { result },
+//    recover = error => println(s"Error: $error"),
+//    transform = (tuple: (Int, Int)) => println(s"Success: $tuple._1")
+//  )
 
 //  fold(
 //    block = { users.findUserById("42") },
@@ -190,4 +245,3 @@ class RaiseErrorMode[E] extends ErrorMode[E, [T] =>> Raise[E] ?=> T] {
 //  // Print the results
 //  println(eitherFromString) // Should print: Left(This is a string)
 //  println(eitherFromInt)    // Should print: Right(42)
-}
