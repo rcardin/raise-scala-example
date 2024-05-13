@@ -1,8 +1,8 @@
 package in.rcard.raise4s
 
 import in.rcard.raise4s.Bind.value
-import in.rcard.raise4s.Raise.recover
 import in.rcard.raise4s.RaiseAnyPredef.{raise, succeed}
+import in.rcard.raise4s.RaiseIterableDef.mapOrAccumulate
 import in.rcard.raise4s.raises
 import ox.*
 
@@ -37,22 +37,25 @@ case class Document(text: String)
 sealed trait Error
 case class UserNotFound(id: String) extends Error
 
-def findAllById(ids: List[String]): List[Either[UserNotFound, User]] = ???
-def findAllByIdWithRaise(ids: List[String]): List[User] raises UserNotFound =
-  findAllById(ids).value
+def findUserById(id: String): User raises UserNotFound = ???
+def findAllById(ids: List[String]): List[User] raises List[UserNotFound] =
+  ids.mapOrAccumulate(findUserById)
 
-object MovieNotFound extends Error
-type MovieNotFound = MovieNotFound.type
+//def findAllByIdWithRaise(ids: List[String]): List[User] raises UserNotFound =
+//  findAllById(ids).value
 
-def findUserById(id: String): Either[UserNotFound, User] = ???
-def findMovieByUserId(userId: String): Option[Movie]     = ???
-def findActorsByMovie(movie: Movie): List[Actor]         = ???
-
-def findActorsByUserId(userId: String): List[Actor] raises UserNotFound | MovieNotFound = {
-  val user  = findUserById(userId).value
-  val movie = recover(findMovieByUserId(user.id).value) { raise(MovieNotFound) }
-  findActorsByMovie(movie)
-}
+//object MovieNotFound extends Error
+//type MovieNotFound = MovieNotFound.type
+//
+//def findUserById(id: String): Either[UserNotFound, User] = ???
+//def findMovieByUserId(userId: String): Option[Movie]     = ???
+//def findActorsByMovie(movie: Movie): List[Actor]         = ???
+//
+//def findActorsByUserId(userId: String): List[Actor] raises UserNotFound | MovieNotFound = {
+//  val user  = findUserById(userId).value
+//  val movie = recover(findMovieByUserId(user.id).value) { raise(MovieNotFound) }
+//  findActorsByMovie(movie)
+//}
 
 //
 //def findUserByIdWithEx(id: String): User =
