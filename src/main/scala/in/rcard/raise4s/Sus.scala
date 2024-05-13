@@ -1,13 +1,14 @@
 package in.rcard.raise4s
 
 import in.rcard.raise4s.Raise.raise
+import org.slf4j.{Logger, LoggerFactory}
 
 import java.util.concurrent.{Callable, CompletableFuture, StructuredTaskScope}
 
-trait Suspended {
+trait Suspend {
   val scope: StructuredTaskScope[Any]
 }
-type suspend[A] = Suspended ?=> A
+type Suspended[A] = Suspend ?=> A
 
 class Job[A](private val cf: CompletableFuture[A]) {
   def value: A = cf.join()
@@ -15,43 +16,31 @@ class Job[A](private val cf: CompletableFuture[A]) {
 
 object Sus {
 
-  val sus1: suspend[Int] = 42
-  val sus2: suspend[Int] = 43
+  val LOGGER: Logger = LoggerFactory.getLogger(getClass)
 
-  inline def structured[A](inline block: Suspended ?=> A): A = {
+  val sus1: Suspended[Int] = 42
+  val sus2: Suspended[Int] = 43
+
+  inline def structured[A](inline block: Suspend ?=> A): A = {
     val _scope = new StructuredTaskScope.ShutdownOnFailure()
-    given suspended: Suspended = new Suspended {
+    given suspended: Suspend = new Suspend {
       override val scope: StructuredTaskScope[Any] = _scope
     }
     try {
-      val task = _scope.fork(() => block)
+      val task = _scope.fork(() => {
+        LOGGER.info(s"${Thread.currentThread()} Starting structured task")
+        block
+      })
       _scope.join().throwIfFailed(identity)
       task.get()
     } finally {
       _scope.close()
     }
-//    val result = Using(new StructuredTaskScope.ShutdownOnFailure()) { _scope =>
-//      given suspended: Suspended = new Suspended {
-//        override val scope: StructuredTaskScope[Any] = _scope
-//      }
-//      val blockResult = block
-//      _scope.join().throwIfFailed()
-//      blockResult
-//    }
-//    result.get
   }
 
-//  def fork[T](block: => T)(using suspended: Suspended): Job[T] = {
-//    val job = new Job[T]
-//    suspended.scope.fork(() => {
-//      job.result.complete(block)
-//    })
-//    job
-//  }
-
-  def fork[T](block: => T): Suspended ?=> Job[T] = {
+  def fork[T](block: Suspend ?=> T): Suspend ?=> Job[T] = {
     val result = new CompletableFuture[T]()
-    summon[Suspended].scope.fork(() => {
+    summon[Suspend].scope.fork(() => {
       try result.complete(block)
       catch
         case throwable: Throwable =>
@@ -61,42 +50,28 @@ object Sus {
     Job(result)
   }
 
-  @main def main2(): Unit = {
+  def findUserById(id: String): Suspended[Int] raises String = {
+    Thread.sleep(1000)
+    LOGGER.info(s"${Thread.currentThread()} Second job")
+    raise("Error")
+  }
 
-//    val result: Try[Int] = Using(new StructuredTaskScope.ShutdownOnFailure()) { scope =>
-//      val value1 = scope.fork(() => {
-//        Thread.sleep(1000)
-//        println("First job")
-//        42
-//      });
-//
-//      val value2 = scope.fork[Int](() => {
-//        Thread.sleep(500)
-//        println("Second job")
-//        throw RuntimeException("Error")
-//      });
-//      scope.join().throwIfFailed()
-//      value1.get() + value2.get()
-//    }
-//    println(result)
+  @main def main2(): Unit = {
 
     val res: Int raises String = structured {
       val v1 = fork[Int] {
         Thread.sleep(2000)
-        println("First job")
+        LOGGER.info(s"${Thread.currentThread()} First job")
         42
       }
-      val v2 = fork[Int] {
+      val v2 = fork[Int]{
         Thread.sleep(1000)
-        println("Second job")
+        LOGGER.info(s"${Thread.currentThread()} Second job")
         raise("Error")
       }
       v1.value + v2.value
     }
-    val result: String | Int = run(res)
-    println(result)
+    val result: String | Int = Raise.run(res)
+    LOGGER.info(s"${Thread.currentThread()} $result")
   }
-
-  inline def run[Error, A](inline block: Raise[Error] ?=> A): Error | A =
-    Raise.fold(block, identity, identity)
 }
