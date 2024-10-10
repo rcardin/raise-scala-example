@@ -1,7 +1,10 @@
 name := "raise-scala-example"
 version := "0.0.1-SNAPSHOT"
-scalaVersion := "3.4.1"
+scalaVersion := "3.5.1"
 
-libraryDependencies += "in.rcard" % "raise4s_3" % "0.0.5"
-libraryDependencies += "com.softwaremill.ox" %% "core" % "0.1.0"
+libraryDependencies += "in.rcard.raise4s" %% "cats-raise4s" % "0.2.0"
+libraryDependencies += "in.rcard.sus4s" %% "core" % "0.0.3"
+libraryDependencies += "com.softwaremill.ox" %% "core" % "0.3.9"
 libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.5.6"
+libraryDependencies += "org.typelevel" %% "cats-effect" % "3.5.4"
+libraryDependencies += "dev.zio" %% "zio" % "2.1.9"
