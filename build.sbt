@@ -1,6 +1,6 @@
 name := "raise-scala-example"
 version := "0.0.1-SNAPSHOT"
-scalaVersion := "3.5.1"
+scalaVersion := "3.5.2"
 
 libraryDependencies += "in.rcard.raise4s" %% "cats-raise4s" % "0.2.0"
 libraryDependencies += "in.rcard.sus4s" %% "core" % "0.0.3"
